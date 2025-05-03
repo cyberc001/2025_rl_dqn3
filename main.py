@@ -15,7 +15,13 @@ parser.add_argument('--batch_size', type = int, default = 256, help = 'Mini-batc
 parser.add_argument('--buffer_size', type = int, default = 100000, help = 'Replay buffer size')
 parser.add_argument('--render', type = bool, default = False, help = 'Render gymnasium environment')
 
+parser.add_argument('--use-noisy', action='store_true', help='Enable Noisy Nets')
+
 # ??? не знаю относятся к алгоритму или нет
+# Я так понимаю, что онтносится, влияет на эпсилон. Эпсилон изменяется линейно от 0.5 к 0.1, 
+# влияет на то насколько "ошибается" модель в выборе действия,
+# выступает в качестве решения проблемы разведка/эксплуатация
+
 parser.add_argument('--noise_init', type = float, default = 0.5, help = 'Initial exploration noise')
 parser.add_argument('--noise_final', type = float, default = 0.1, help = 'Final exploration noise')
 parser.add_argument('--noise_decay_epochs', type = float, default = 100000, help = 'Amount of epochs to read noise_final')
@@ -26,9 +32,14 @@ parser.add_argument('--pr_beta', type = float, default = 0.6, help = '[Prioritiz
 parser.add_argument('--pr_beta_gain_steps', type = float, default = 0.6, help = '[Prioritized Replay] Number of epochs to increment beta from pr_beta to 1.0')
 
 opt = parser.parse_args()
-
+if opt.use_noisy:
+    print("Starting noisy netsDQN")
+else:
+    print("Starting DQN")
+    
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('Using CUDA device', device)
+
 
 if __name__ == '__main__':
     env = gym.make('LunarLander-v3', render_mode = 'human' if opt.render else None)

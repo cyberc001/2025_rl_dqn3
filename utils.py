@@ -1,5 +1,8 @@
 import numpy as np
 import torch
+import torch.nn as nn
+import math
+import torch.nn.functional as F
 
 class SumTree(object):
 
@@ -84,3 +87,63 @@ class LinearSchedule(object):
     def value(self, t):
         fraction = min(float(t) / self.schedule_timesteps, 1.0)
         return self.initial_p + fraction * (self.final_p - self.initial_p)
+    
+
+class NoisyLinear(nn.Linear):
+    def __init__(self, in_features, out_features, sigma_init=0.5, bias=True):
+        super(NoisyLinear, self).__init__(in_features, out_features, bias=bias)
+
+        self.sigma_init = sigma_init
+        self.sigma_weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.register_buffer('epsilon_weight', torch.Tensor(out_features, in_features))
+
+        if bias:
+            self.sigma_bias = nn.Parameter(torch.Tensor(out_features))
+            self.register_buffer('epsilon_bias', torch.Tensor(out_features))
+        else:
+            self.sigma_bias = None
+            self.epsilon_bias = None
+
+        self.init_noise_parameters()
+
+    def init_noise_parameters(self):
+        """Инициализация шумовых параметров (sigma_weight, sigma_bias)"""
+        self.sigma_weight.data.fill_(self.sigma_init)
+        if self.bias is not None:
+            self.sigma_bias.data.fill_(self.sigma_init)
+
+    def reset_parameters(self):
+        """Инициализация весов и bias (вызывается из родителя)"""
+        std = 1 / math.sqrt(self.in_features)
+        self.weight.data.uniform_(-std, std)
+        if self.bias is not None:
+            self.bias.data.uniform_(-std, std)
+    
+
+    def forward(self, input):
+        def scale_noise(size):
+            x = torch.randn(size)
+            return x.sign().mul(x.abs().sqrt())
+
+        epsilon_in = scale_noise(self.in_features)
+        epsilon_out = scale_noise(self.out_features)
+        weight_epsilon = epsilon_out.ger(epsilon_in)
+        bias_epsilon = epsilon_out if self.bias is not None else None
+
+        if self.training:
+            weight = self.weight + self.sigma_weight * weight_epsilon
+            bias = self.bias + self.sigma_bias * bias_epsilon if self.bias is not None else None
+        else:
+            weight = self.weight
+            bias = self.bias
+
+        return F.linear(input, weight, bias)
+
+    def reset_noise(self):
+        """Сбрасывает шум после каждого шага обучения"""
+        device = self.weight.device
+        epsilon_in = torch.randn(self.in_features, device=device)
+        epsilon_out = torch.randn(self.out_features, device=device)
+        self.epsilon_weight = epsilon_out.ger(epsilon_in)
+        if self.bias is not None:
+            self.epsilon_bias = epsilon_out

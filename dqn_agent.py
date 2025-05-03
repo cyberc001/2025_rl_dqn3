@@ -1,4 +1,5 @@
 import torch.nn as nn
+from utils import NoisyLinear
 
 class QNet(nn.Module):
     '''
@@ -6,18 +7,27 @@ class QNet(nn.Module):
         action_dim - размерность пространства действий (количество возможных действий) (выходного слоя)
         hidden_shape - список размеров скрытых слоёв
     '''
-    def __init__(self, state_dim, action_dim, hidden_shape):
+    def __init__(self, state_dim, action_dim, hidden_shape, use_noisy=False):
+        self.use_noisy = use_noisy
         super(QNet, self).__init__()
         layers = [state_dim] + list(hidden_shape) + [action_dim]
-
-        # создание модели
         model_layers = []
         for i in range(len(layers) - 1):
-            model_layers += [nn.Linear(layers[i], layers[i + 1]), nn.ReLU() if i < len(layers) - 2 else nn.Identity()]
+            in_f, out_f = layers[i], layers[i+1]
+            if use_noisy and i < len(layers)-2:  # Только скрытые слои
+                model_layers += [NoisyLinear(in_f, out_f), nn.ReLU()]
+            else:
+                model_layers += [nn.Linear(in_f, out_f), nn.ReLU() if i < len(layers) - 2 else nn.Identity()]
         self.model = nn.Sequential(*model_layers)
 
     def forward(self, s):
         return self.model(s)
+    
+    def reset_noise(self):
+        if self.use_noisy:
+            for module in self.modules():
+                if isinstance(module, NoisyLinear): 
+                    module.reset_noise()
 
 ''' Базовый класс для алгоритмов DQN '''
 class DQNAgent():

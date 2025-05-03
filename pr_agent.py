@@ -8,7 +8,14 @@ from utils import LinearSchedule, SumTree
 class PRAgent(DQNAgent):
     def __init__(self, device, opt):
         self.device = device
-        self.qnet = QNet(opt.state_dim, opt.action_dim, (opt.hidden_width, opt.hidden_width)).to(device)
+        self.use_noisy = opt.use_noisy
+        self.qnet = QNet(
+            opt.state_dim,
+            opt.action_dim,
+            (opt.hidden_width, opt.hidden_width),
+            use_noisy=self.use_noisy
+        ).to(device)
+        
         self.qnet_optimizer = torch.optim.Adam(self.qnet.parameters(), lr = opt.lr)
         self.qtarget = copy.deepcopy(self.qnet)
         for p in self.qtarget.parameters():
@@ -21,13 +28,14 @@ class PRAgent(DQNAgent):
         self.action_dim = opt.action_dim
         self.replay_buffer = opt.replay_buffer
 
-        self.noise_scheduler = LinearSchedule(opt.noise_decay_epochs, opt.noise_init, opt.noise_final)
+        if not opt.use_noisy:
+            self.noise_scheduler = LinearSchedule(opt.noise_decay_epochs, opt.noise_init, opt.noise_final)
         self.beta_scheduler = LinearSchedule(opt.pr_beta_gain_steps, opt.pr_beta, 1.0)
 
     def select_action(self, state, deterministic = True):
         with torch.no_grad():
             state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
-            if deterministic:
+            if deterministic or self.use_noisy:
                 return self.qnet(state).argmax().item()
             else:
                 if np.random.rand() < self.noise:
@@ -36,7 +44,8 @@ class PRAgent(DQNAgent):
                     return self.qnet(state).argmax().item()
 
     def pre_update(self, total_steps):
-        self.noise = self.noise_scheduler.value(total_steps)
+        if not self.use_noisy:
+            self.noise = self.noise_scheduler.value(total_steps)
         self.replay_buffer.beta = self.beta_scheduler.value(total_steps)
 
     def train(self):
@@ -56,6 +65,10 @@ class PRAgent(DQNAgent):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.qnet.parameters(), 10.0)
         self.qnet_optimizer.step()
+
+        if self.use_noisy:
+            self.qnet.reset_noise()  # Вызываем сброс шума.
+                                     # Кажая итерация свой шум = постоянно разведуемы разное 
 
         for param, target_param in zip(self.qnet.parameters(), self.qtarget.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
