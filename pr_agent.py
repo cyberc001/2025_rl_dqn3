@@ -2,14 +2,15 @@ import copy
 import numpy as np
 import torch
 import os
-from dqn_agent import DQNAgent, QNet
+#from dqn_agent import DQNAgent, QNet
+from dqn_agent import DQNAgent, DuelingQNet
 from utils import LinearSchedule, SumTree
 
 class PRAgent(DQNAgent):
     def __init__(self, device, opt):
         self.device = device
         self.use_noisy = opt.use_noisy
-        self.qnet = QNet(
+        self.qnet = DuelingQNet(
             opt.state_dim,
             opt.action_dim,
             (opt.hidden_width, opt.hidden_width),
