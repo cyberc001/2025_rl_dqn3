@@ -16,7 +16,7 @@ parser.add_argument('--buffer_size', type = int, default = 100000, help = 'Repla
 parser.add_argument('--render', type = bool, default = False, help = 'Render gymnasium environment')
 
 parser.add_argument('--use-noisy', action='store_true', help='Enable Noisy Nets')
-
+parser.add_argument('--dueling', action='store_true', help='Use DuelingDQN')
 # ??? не знаю относятся к алгоритму или нет
 # Я так понимаю, что онтносится, влияет на эпсилон. Эпсилон изменяется линейно от 0.5 к 0.1, 
 # влияет на то насколько "ошибается" модель в выборе действия,
@@ -34,6 +34,8 @@ parser.add_argument('--pr_beta_gain_steps', type = float, default = 0.6, help = 
 opt = parser.parse_args()
 if opt.use_noisy:
     print("Starting noisy netsDQN")
+elif opt.dueling:
+    print("Starting DuelingDQN")
 else:
     print("Starting DQN")
     
@@ -53,9 +55,9 @@ if __name__ == '__main__':
 
     torch.backends.cudnn.deterministic = True
 
-    if opt.algo == 'prio_replay':
+    if opt.algo == 'prio_replay' or opt.dueling:
         opt.replay_buffer = PrioritizedReplayBuffer(device, opt)
-        agent = PRAgent(device, opt)
+        agent = PRAgent(device, opt, use_dueling=opt.dueling)
 
     total_steps = 0
     while total_steps < opt.max_epochs:

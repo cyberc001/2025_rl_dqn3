@@ -7,8 +7,9 @@ from dqn_agent import DQNAgent, DuelingQNet
 from utils import LinearSchedule, SumTree
 
 class PRAgent(DQNAgent):
-    def __init__(self, device, opt):
+    def __init__(self, device, opt, use_dueling=False):
         self.device = device
+        self.use_dueling = use_dueling
         self.use_noisy = opt.use_noisy
         self.qnet = DuelingQNet(
             opt.state_dim,
