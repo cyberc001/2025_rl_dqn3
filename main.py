@@ -2,7 +2,10 @@ import numpy as np
 import gymnasium as gym
 import argparse
 import torch
+import signal
+import sys
 from pr_agent import PRAgent, PrioritizedReplayBuffer
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--algo', type = str, default = 'prio_replay', help = 'Policy update algorithm: "prio_replay"')
@@ -32,15 +35,29 @@ parser.add_argument('--pr_beta', type = float, default = 0.6, help = '[Prioritiz
 parser.add_argument('--pr_beta_gain_steps', type = float, default = 0.6, help = '[Prioritized Replay] Number of epochs to increment beta from pr_beta to 1.0')
 
 opt = parser.parse_args()
+plot_title = ''
 if opt.use_noisy:
-    print("Starting noisy netsDQN")
+    plot_title = 'noisy nets'
 elif opt.dueling:
-    print("Starting DuelingDQN")
+    plot_title = 'Dueling DQN'
 else:
-    print("Starting DQN")
+    plot_title = 'DQN'
+print('Starting ' + plot_title)
     
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('Using CUDA device', device)
+
+total_reward = 0
+plot_x = []
+plot_y = []
+def sigint_hndl(sig, frame):
+    plt.plot(plot_x, plot_y)
+    plt.suptitle(plot_title)
+    plt.xlabel('Количество эпох')
+    plt.ylabel('Средняя награда')
+    plt.show()
+    sys.exit(0)
+signal.signal(signal.SIGINT, sigint_hndl)
 
 
 if __name__ == '__main__':
@@ -75,6 +92,12 @@ if __name__ == '__main__':
             print(total_steps, '. reward:', r)
             if r <= -100: # ???
                 r = -10
+
+            # обновить график
+            total_reward += r
+            if total_steps >= opt.warmup_epochs and total_steps % 100 == 0:
+                plot_x.append(total_steps)
+                plot_y.append(total_reward / total_steps)
 
             agent.replay_buffer.add(s, a, r, s_next, dw)
             done = dw or tr
