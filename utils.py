@@ -127,8 +127,9 @@ class NoisyLinear(nn.Linear):
 
         epsilon_in = scale_noise(self.in_features)
         epsilon_out = scale_noise(self.out_features)
-        weight_epsilon = epsilon_out.ger(epsilon_in)
-        bias_epsilon = epsilon_out if self.bias is not None else None
+        device = self.weight.device
+        weight_epsilon = epsilon_out.ger(epsilon_in).to(device)
+        bias_epsilon = epsilon_out.to(device) if self.bias is not None else None
 
         if self.training:
             weight = self.weight + self.sigma_weight * weight_epsilon
